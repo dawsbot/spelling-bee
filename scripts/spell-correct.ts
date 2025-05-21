@@ -8,13 +8,17 @@ const conf = new Conf<{ ignoredWords: string[] }>({
 });
 const IGNORED_KEY = "ignoredWords";
 
+// Utility regexes for skipping emails and URLs
+const EMAIL_REGEX = /[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}/;
+const URL_REGEX = /https?:\/\/\S+|www\.[^\s]+/;
+
 function getIgnoredWords(): Set<string> {
   return new Set(conf.get(IGNORED_KEY, []));
 }
 
 function addIgnoredWord(word: string) {
   const words = new Set(conf.get(IGNORED_KEY, []));
-  words.add(word);
+  words.add(word.toLowerCase());
   conf.set(IGNORED_KEY, Array.from(words));
 }
 
@@ -40,8 +44,8 @@ async function promptForCorrection(
   // Print context
   if (prevLine) console.log(`\nPrev: ${prevLine}`);
   console.log(`Line: ${currLine}`);
-  // Truncate suggestions to 10, add '*ignore*' and 'ignore forever' as the first options
-  const choices = ["*ignore*", "ignore forever", ...suggestions.slice(0, 10)];
+  // Truncate suggestions to 10, add '*ignore*' and '*ignore forever*' as the first options
+  const choices = ["*ignore*", "*ignore forever*", ...suggestions.slice(0, 10)];
   const prompt = new Select({
     name: "correction",
     message: `Choose a correction for "${word}":`,
@@ -49,7 +53,7 @@ async function promptForCorrection(
   });
   const answer = await prompt.run();
   if (answer === "*ignore*") return word;
-  if (answer === "ignore forever") {
+  if (answer === "*ignore forever*") {
     addIgnoredWord(word);
     console.log(`Added '${word}' to ignore forever list.`);
     return word;
@@ -59,24 +63,39 @@ async function promptForCorrection(
 
 export async function correctSpelling(text: string): Promise<string> {
   const spell = await getSpell();
-  const ignored = getIgnoredWords();
+  let ignored = getIgnoredWords();
   const lines = text.split(/\r?\n/);
   for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
     const line = lines[lineIdx] ?? "";
+    // Skip spellchecking for lines that are just URLs or emails
+    if (EMAIL_REGEX.test(line) || URL_REGEX.test(line)) {
+      lines[lineIdx] = line;
+      continue;
+    }
     const words = line.split(/(\b\w+\b)/g);
     for (let i = 0; i < words.length; i++) {
       const word = words[i] ?? "";
-      if (ignored.has(word)) continue;
-      if (/^\w+$/.test(word) && !spell.correct(word)) {
-        const suggestions = spell.suggest(word);
+      // Skip emails, URLs, and numbers as words
+      if (EMAIL_REGEX.test(word) || URL_REGEX.test(word)) continue;
+      if (/^\d+(\.\d+)?$/.test(word)) continue; // Ignore numbers (integer or decimal)
+      // Strip common Markdown formatting from start/end
+      const stripped = word.replace(
+        /^[*_~`\[\]()<>#>!.,:;'"]+|[*_~`\[\]()<>#>!.,:;'"]+$/g,
+        ""
+      );
+      if (!stripped) continue;
+      if (ignored.has(stripped.toLowerCase())) continue;
+      if (/^\w+$/.test(stripped) && !spell.correct(stripped)) {
+        const suggestions = spell.suggest(stripped);
         if (suggestions.length > 0) {
           const prevLine = lineIdx > 0 ? lines[lineIdx - 1] ?? "" : "";
           words[i] = await promptForCorrection(
-            word,
+            stripped,
             suggestions,
             prevLine,
             line
           );
+          ignored = getIgnoredWords();
         }
       }
     }
