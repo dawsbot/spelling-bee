@@ -1,0 +1,106 @@
+# Overview
+This project is a Bun.js backend script designed to automatically find and fix spelling mistakes in any GitHub repository. The primary use case is to scan trending GitHub repositories, but the tool should also support fixing spelling in any user-specified repository. The script will search through Markdown (.md), plain text (.txt), and other common text file formats (such as .rtf, if present in the repo). The goal is to streamline open source contributions by improving documentation and text quality, while minimizing clutter in the user's GitHub account from stale forks.
+
+# Core Features
+- **Trending Repo Scanning**: Automatically fetch and process trending GitHub repositories for spelling corrections.
+  - Why: Keeps the tool relevant and impactful by targeting popular projects.
+  - How: Use the GitHub API to identify trending repositories.
+- **Flexible Repo Targeting**: Allow users to specify any GitHub repository for spelling correction.
+  - Why: Increases the tool's utility beyond just trending projects.
+  - How: Accept repo URLs or owner/repo identifiers as input.
+- **Text File Detection**: Search for and process .md, .txt, and other text-based files (e.g., .rtf) in the repository.
+  - Why: Ensures all relevant documentation and text files are improved.
+  - How: Recursively scan the repo for supported file extensions.
+- **Automated Spelling Correction**: Detect and fix spelling mistakes in supported files.
+  - Why: Improves the quality of open source documentation and code comments.
+  - How: Use a spelling correction library or API.
+- **Pull Request Automation**: Create PRs with spelling fixes using the user's GitHub account.
+  - Why: Streamlines the contribution process.
+  - How: Authenticate with the user's GitHub account and open PRs with changes.
+- **Fork Management**: Avoid leaving stale forks in the user's GitHub account if possible.
+  - Why: Prevents clutter and maintenance overhead for the user.
+  - How: Explore alternatives to forking, or implement fork cleanup after PR merge/close.
+
+# User Experience
+- **User Personas**:
+  - Open source contributors who want to improve documentation quality.
+  - Developers looking to automate spelling fixes in their own or others' repos.
+- **Key User Flows**:
+  - User runs the script, which fetches trending repos, applies fixes, and opens PRs.
+  - User specifies a repo, the script processes it, and opens a PR with corrections.
+- **UI/UX Considerations**:
+  - Command-line interface (CLI) for specifying repos and options.
+  - Clear output/logging for actions taken (repos processed, PRs opened, errors).
+  - Prompts for GitHub authentication if not already configured.
+
+# Technical Architecture
+- **System Components**:
+  - Bun.js script (entry point)
+  - GitHub API integration (for repo discovery, forking, PRs)
+  - File system utilities for repo cloning and file scanning
+  - Spelling correction engine/library
+- **Data Models**:
+  - Repository metadata (name, owner, URL, etc.)
+  - File list (paths, types)
+  - Correction report (original vs. fixed text)
+- **APIs and Integrations**:
+  - GitHub REST API (repo discovery, forking, PRs, authentication)
+  - Optional: Third-party spell checking API or local library
+- **Infrastructure Requirements**:
+  - Runs on any system with Bun.js installed
+  - Requires GitHub personal access token for authentication
+
+# Development Roadmap
+- **MVP Requirements**:
+  - CLI to specify repo(s) or trigger trending scan
+  - GitHub API integration for repo access and PR creation
+  - File scanning for .md, .txt, and .rtf files
+  - Spelling correction and patching
+  - PR creation with summary of changes
+  - Basic fork management (at least cleanup after PR merge/close)
+- **Future Enhancements**:
+  - Support for additional file types (e.g., .rst, .adoc, code comments)
+  - Web UI for easier usage
+  - Configurable spelling dictionaries and ignore lists
+  - Batch processing and scheduling
+  - Advanced fork management (e.g., ephemeral forks, direct PRs if permissions allow)
+
+# Logical Dependency Chain
+- Authenticate with GitHub (user provides token)
+- Discover target repositories (trending or user-specified)
+- Clone or access repository files
+- Detect and process supported text files
+- Apply spelling corrections
+- Commit changes and push to fork (if required)
+- Open PR to original repository
+- Clean up fork if PR is merged/closed
+
+# Risks and Mitigations
+- **Technical challenges**:
+  - GitHub API rate limits: Mitigate by caching, batching, and respecting API quotas.
+  - Fork cleanup: Research GitHub API capabilities for deleting forks or using ephemeral forks.
+  - Spelling correction false positives: Allow user to review changes before PR, or provide a dry-run mode.
+- **MVP scoping**:
+  - Focus on .md, .txt, and .rtf files for initial release.
+  - Defer advanced features (e.g., web UI, batch scheduling) to future phases.
+- **Resource constraints**:
+  - Ensure the script is efficient and can run on typical developer hardware.
+
+# Appendix
+- **Research findings**:
+  - GitHub API supports forking, PR creation, and repo deletion, but deleting forks may require manual steps or elevated permissions.
+  - Bun.js offers fast startup and native TypeScript/JavaScript support, making it suitable for scripting tasks.
+- **Technical specifications**:
+  - Bun.js >= 1.0
+  - Node.js-compatible spell checking library or API
+  - GitHub personal access token with repo and PR permissions
+
+---
+
+## Follow-up Questions
+1. **GitHub Fork Management**: Are you open to the script deleting forks from your account after PRs are merged/closed, or do you want to avoid forking entirely (which may limit PR creation on some repos)?
+2. **Authentication**: Do you already have a GitHub personal access token with the necessary permissions, or should the script guide you through creating one?
+3. **Spelling Correction Engine**: Do you have a preferred spell checking library or API (e.g., Hunspell, Typo.js, or a cloud service), or should we select one based on Bun.js compatibility?
+4. **Review Process**: Should the script auto-commit all fixes, or would you like an option to review and approve changes before PRs are created?
+5. **Additional File Types**: Besides .md, .txt, and .rtf, are there other text-based file formats you want to support from the start?
+6. **CLI vs. Web UI**: Is a command-line interface sufficient for your workflow, or would you like a web-based UI in the future?
