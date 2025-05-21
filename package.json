@@ -4,12 +4,17 @@
   "type": "module",
   "private": true,
   "devDependencies": {
-    "@types/bun": "latest"
+    "@types/bun": "latest",
+    "@types/nspell": "^2.1.6"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
-    "conf": "^13.1.0"
+    "conf": "^13.1.0",
+    "dictionary-en": "^4.0.0",
+    "enquirer": "^2.4.1",
+    "ignore": "^7.0.4",
+    "nspell": "^2.1.5"
   }
 }
