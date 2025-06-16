@@ -87,11 +87,11 @@ export async function cloneRepo({
 }
 
 // Example usage (uncomment to test directly)
-// (async () => {
-//   try {
-//     const result = await cloneRepo({ owner: "vercel", repo: "next.js" });
-//     console.log("Cloned to:", result.dir, "Branch:", result.branch);
-//   } catch (e) {
-//     console.error(e);
-//   }
-// })();
+(async () => {
+  try {
+    const result = await cloneRepo({ owner: "nunomaduro", repo: "pokio" });
+    console.log("Cloned to:", result.dir, "Branch:", result.branch);
+  } catch (e) {
+    console.error(e);
+  }
+})();

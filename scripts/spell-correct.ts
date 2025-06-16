@@ -11,6 +11,8 @@ const conf = new Conf<{ ignoredWords: string[]; ignoredDirectories: string[] }>(
 );
 const IGNORED_KEY = "ignoredWords";
 const IGNORED_DIRS_KEY = "ignoredDirectories";
+const TEMP_IGNORED_KEY = "tempIgnoredWords";
+const ONE_WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 // Utility regexes for skipping emails and URLs
 const EMAIL_REGEX = /[\w.-]+@[\w.-]+\.[a-zA-Z]{2,}/;
@@ -36,9 +38,35 @@ function addIgnoredDir(dir: string) {
   conf.set(IGNORED_DIRS_KEY, Array.from(dirs));
 }
 
+function getTempIgnoredWords(): Set<string> {
+  const now = Date.now();
+  let tempList: { word: string; ts: number }[] = conf.get(TEMP_IGNORED_KEY, []);
+  // Filter out expired entries
+  tempList = tempList.filter(({ ts }) => now - ts < ONE_WEEK_MS);
+  conf.set(TEMP_IGNORED_KEY, tempList); // Clean up expired
+  return new Set(tempList.map(({ word }) => word.toLowerCase()));
+}
+
+function addTempIgnoredWord(word: string) {
+  const now = Date.now();
+  let tempList: { word: string; ts: number }[] = conf.get(TEMP_IGNORED_KEY, []);
+  // Remove any existing entry for this word
+  tempList = tempList.filter(
+    (entry) => entry.word.toLowerCase() !== word.toLowerCase()
+  );
+  tempList.push({ word, ts: now });
+  conf.set(TEMP_IGNORED_KEY, tempList);
+}
+
 class IgnoreDirectoryError extends Error {
   constructor() {
     super("Ignore this directory");
+  }
+}
+
+class IgnoreFileError extends Error {
+  constructor() {
+    super("Ignore this file");
   }
 }
 
@@ -60,7 +88,7 @@ async function promptForCorrection(
   suggestions: string[],
   prevLine: string,
   currLine: string,
-  filePath?: string
+  filePath: string
 ): Promise<string> {
   // Print context
   if (filePath) {
@@ -69,12 +97,14 @@ async function promptForCorrection(
     const relPath = path.relative(repoRoot, filePath);
     console.log(`File: ${relPath}`);
   }
+  console.log(filePath);
   if (prevLine) console.log(`\nPrev: ${prevLine}`);
   console.log(`Line: ${currLine}`);
-  // Truncate suggestions to 10, add '*ignore*', '*ignore forever*', and '*ignore directory*' as the first options
+  // Truncate suggestions to 10, add '*ignore*', '*ignore forever*', '*ignore file*', and '*ignore directory*' as the first options
   const choices = [
     "*ignore*",
     "*ignore forever*",
+    "*ignore file*",
     "*ignore directory*",
     ...suggestions.slice(0, 10),
   ];
@@ -84,11 +114,17 @@ async function promptForCorrection(
     choices,
   });
   const answer = await prompt.run();
-  if (answer === "*ignore*") return word;
+  if (answer === "*ignore*") {
+    addTempIgnoredWord(word);
+    return word;
+  }
   if (answer === "*ignore forever*") {
     addIgnoredWord(word);
     console.log(`Added '${word}' to ignore forever list.`);
     return word;
+  }
+  if (answer === "*ignore file*") {
+    throw new IgnoreFileError();
   }
   if (answer === "*ignore directory*") {
     if (filePath) {
@@ -104,20 +140,19 @@ async function promptForCorrection(
 
 export async function correctSpelling(
   text: string,
-  filePath?: string
+  filePath: string
 ): Promise<string> {
   // Check if this file's directory is ignored
-  if (filePath) {
-    const repoRoot = process.cwd();
-    const dir = path.relative(repoRoot, path.dirname(filePath));
-    const ignoredDirs = getIgnoredDirs();
-    if (ignoredDirs.has(dir)) {
-      // Skip this file
-      return text;
-    }
+  const repoRoot = process.cwd();
+  const dir = path.relative(repoRoot, path.dirname(filePath));
+  const ignoredDirs = getIgnoredDirs();
+  if (ignoredDirs.has(dir)) {
+    // Skip this file
+    return text;
   }
   const spell = await getSpell();
   let ignored = getIgnoredWords();
+  let tempIgnored = getTempIgnoredWords();
   const lines = text.split(/\r?\n/);
   let inFencedBlock = false;
   let fencedBlockDelimiter: string | undefined = "";
@@ -192,6 +227,7 @@ export async function correctSpelling(
             );
             if (!stripped) continue;
             if (ignored.has(stripped.toLowerCase())) continue;
+            if (tempIgnored.has(stripped.toLowerCase())) continue;
             if (/^\w+$/.test(stripped) && !spell.correct(stripped)) {
               const suggestions = spell.suggest(stripped);
               if (suggestions.length > 0) {
@@ -204,6 +240,7 @@ export async function correctSpelling(
                   filePath
                 );
                 ignored = getIgnoredWords();
+                tempIgnored = getTempIgnoredWords();
               }
             }
           }
@@ -213,7 +250,7 @@ export async function correctSpelling(
       lines[lineIdx] = result as string;
     }
   } catch (err) {
-    if (err instanceof IgnoreDirectoryError) {
+    if (err instanceof IgnoreDirectoryError || err instanceof IgnoreFileError) {
       // Skip the rest of this file
       return lines.join("\n");
     }

@@ -21,7 +21,10 @@ if (!rootDir) {
     let totalChanged = 0;
     for (const file of files) {
       const orig = await readFile(file, "utf8");
-      const corrected = await correctSpelling(orig);
+      const corrected = await correctSpelling(
+        orig,
+        file.replace(/^\/tmp\/[^/]+\//, "")
+      );
       if (orig !== corrected) {
         await writeFile(file, corrected, "utf8");
         totalChanged++;
