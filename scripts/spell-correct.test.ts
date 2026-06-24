@@ -34,6 +34,15 @@ test("does not flag URLs or emails", async () => {
   expect(out).toContain("me@exmaple.com");
 });
 
+test("corrects prose in .rst and .txt files too", async () => {
+  for (const file of ["docs.rst", "notes.text"]) {
+    const input = "This sentance has a typo.";
+    const out = await correctSpelling(input, file, { autoYes: true });
+    expect(out).not.toBe(input);
+    expect(out).toContain("sentence");
+  }
+});
+
 test("does not flag technical terms, brands, or acronyms", async () => {
   // The whole reason for the cspell engine: these are real words in a
   // developer's vocabulary and must not be reported as misspellings.

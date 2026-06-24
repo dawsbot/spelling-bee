@@ -4,12 +4,12 @@ A [Bun](https://bun.sh) CLI that finds and fixes spelling mistakes in GitHub
 repositories and opens pull requests with the corrections. Point it at a single
 repo or let it sweep trending repositories automatically.
 
-It scans `.md`, `.txt`, and `.rtf` files (skipping translated docs like
-`README.de.md`, since the checker is English-only), is Markdown-aware (skips
-fenced and inline code, URLs, and emails), and lets you ignore words, files,
-directories, or the whole repo during interactive review. Any repository it has
-already processed (a PR opened, no fixes found, or skipped) is remembered
-locally and skipped before cloning on future runs.
+It scans `.md`, `.markdown`, `.txt`, `.text`, and `.rst` files (skipping
+translated docs like `README.de.md`, since the checker is English-only), is
+format-aware (skips fenced and inline code, URLs, and emails), and lets you
+ignore words, files, directories, or the whole repo during interactive review.
+Any repository it has already processed (a PR opened, no fixes found, or
+skipped) is remembered locally and skipped before cloning on future runs.
 
 ## Setup
 

@@ -126,11 +126,22 @@ interface Misspelling {
   suggestions: string[];
 }
 
+/** cspell languageId for a file, so each format is parsed with the right rules. */
+function languageIdFor(filePath: string): string {
+  const lower = filePath.toLowerCase();
+  if (lower.endsWith(".md") || lower.endsWith(".markdown")) return "markdown";
+  if (lower.endsWith(".rst")) return "restructuredtext";
+  return "plaintext"; // .txt, .text, and anything else
+}
+
 /** Run cspell over a fragment of prose and return its misspellings in order. */
-async function findMisspellings(text: string): Promise<Misspelling[]> {
+async function findMisspellings(
+  text: string,
+  languageId: string
+): Promise<Misspelling[]> {
   const settings = await getSettings();
   const { issues } = await spellCheckDocument(
-    { uri: "text://fragment.md", text, languageId: "markdown", locale: "en" },
+    { uri: "text://fragment", text, languageId, locale: "en" },
     { generateSuggestions: true, numSuggestions: 10 },
     settings
   );
@@ -182,7 +193,16 @@ async function promptForCorrection(
     message: `Choose a correction for "${word}":`,
     choices,
   });
-  const answer = await prompt.run();
+  // enquirer puts the terminal in raw mode and turns Ctrl+C into a prompt
+  // "cancel" (a rejected run()), not a process SIGINT. Treat that as quit so
+  // Ctrl+C exits the whole program instead of falling through to the next repo.
+  let answer: string;
+  try {
+    answer = await prompt.run();
+  } catch {
+    console.log("\nAborted.");
+    process.exit(130);
+  }
   if (answer === "*ignore*") {
     addTempIgnoredWord(word);
     return word;
@@ -224,6 +244,7 @@ export async function correctSpelling(
     // Skip this file
     return text;
   }
+  const languageId = languageIdFor(filePath);
   let ignored = getIgnoredWords();
   let tempIgnored = getTempIgnoredWords();
   const lines = text.split(/\r?\n/);
@@ -287,7 +308,7 @@ export async function correctSpelling(
           // Let cspell tokenize the fragment (it handles camelCase, code
           // terms, and numbers itself) and replace each misspelling in place.
           // Issues are ordered by offset, so we splice from a moving cursor.
-          const issues = await findMisspellings(seg.text);
+          const issues = await findMisspellings(seg.text, languageId);
           let cursor = 0;
           for (const issue of issues) {
             const lower = issue.word.toLowerCase();

@@ -4,17 +4,22 @@ import { mkdtempSync, writeFileSync, mkdirSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 
-test("finds .md/.txt/.rtf files and skips other extensions", async () => {
+test("finds prose files and skips code, config, and rtf", async () => {
   const dir = mkdtempSync(join(tmpdir(), "sb-find-"));
   writeFileSync(join(dir, "readme.md"), "x");
+  writeFileSync(join(dir, "guide.markdown"), "x");
   writeFileSync(join(dir, "notes.txt"), "x");
-  writeFileSync(join(dir, "doc.rtf"), "x");
+  writeFileSync(join(dir, "notes.text"), "x");
+  writeFileSync(join(dir, "docs.rst"), "x");
+  writeFileSync(join(dir, "doc.rtf"), "x"); // control-word format, excluded
   writeFileSync(join(dir, "index.js"), "x");
   writeFileSync(join(dir, "data.json"), "x");
 
   const files = await findTextFiles(dir);
   expect(files.map((f) => f.split("/").pop()!).sort()).toEqual([
-    "doc.rtf",
+    "docs.rst",
+    "guide.markdown",
+    "notes.text",
     "notes.txt",
     "readme.md",
   ]);

@@ -3,7 +3,9 @@ import { join } from "path";
 import { existsSync, readFileSync } from "fs";
 import ignore from "ignore";
 
-const TEXT_FILE_EXTENSIONS = [".md", ".txt", ".rtf"];
+// Prose formats we can spellcheck safely. RTF is intentionally excluded: it's a
+// control-word format (\pard, \fonttbl, ...) that produces garbage corrections.
+const TEXT_FILE_EXTENSIONS = [".md", ".markdown", ".txt", ".text", ".rst"];
 
 // ISO 639-1 language codes. We use these to skip translated docs such as
 // README.de.md or README.zh-CN.md: our spellchecker is English-only, so a

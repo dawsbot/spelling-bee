@@ -7,6 +7,15 @@ import { openPr, cleanupForks } from "./scripts/open-pr";
 import { fetchTrendingRepos } from "./scripts/fetch-trending-repos";
 import { hasSeenRepo, markRepoSeen } from "./scripts/repo-cache";
 
+// Ctrl+C quits the whole program. The --trending loop swallows per-repo errors
+// to keep going, so without this an interrupt could be mistaken for one repo
+// failing and move on to the next. (Interrupts raised while an interactive
+// prompt holds the terminal in raw mode are handled in spell-correct.ts.)
+process.on("SIGINT", () => {
+  console.log("\nAborted.");
+  process.exit(130);
+});
+
 interface RunOptions {
   autoYes: boolean;
   dryRun: boolean;
