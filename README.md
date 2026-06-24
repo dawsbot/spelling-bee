@@ -14,8 +14,16 @@ during interactive review.
 bun install
 ```
 
-Create a `.env` file with a GitHub token. The token needs the `repo` scope to
-fork and open PRs, and `delete_repo` if you want the fork cleanup feature.
+Authentication prefers the GitHub CLI. If you're logged in, nothing else is
+needed:
+
+```bash
+gh auth login
+```
+
+Alternatively (or as a fallback), set a `GITHUB_TOKEN` in a `.env` file. The
+token needs the `repo` scope to fork and open PRs, and `delete_repo` for the
+fork cleanup feature.
 
 ```
 GITHUB_TOKEN=ghp_your_token_here
