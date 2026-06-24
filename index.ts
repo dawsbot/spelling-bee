@@ -25,13 +25,13 @@ const USAGE = `spelling-bee — fix spelling in GitHub repos and open PRs
 
 Usage:
   bun run index.ts <owner/repo | github-url>   Fix one repository
-  bun run index.ts --trending [--limit N]      Fix N trending repos (default 5)
+  bun run index.ts --trending [N]              Fix N trending repos (default 5)
   bun run index.ts --cleanup                   Delete forks for merged/closed PRs
 
 Options:
   --yes        Non-interactive: auto-apply the top spelling suggestion
   --dry-run    Show what would change without forking or opening a PR
-  --limit N    Number of trending repos to process (with --trending)
+  --limit N    Number of trending repos to process (alias for --trending N)
   --help       Show this help
 `;
 
@@ -132,9 +132,13 @@ async function main() {
   }
 
   if (args.includes("--trending")) {
+    // Limit can be given as `--limit N` or as a bare number, e.g.
+    // `--trending 50`. Falls back to 5.
     const limitIdx = args.indexOf("--limit");
-    const limit =
-      limitIdx !== -1 && args[limitIdx + 1] ? Number(args[limitIdx + 1]) : 5;
+    const rawLimit =
+      limitIdx !== -1 ? args[limitIdx + 1] : args.find((a) => /^\d+$/.test(a));
+    const parsed = Number(rawLimit);
+    const limit = Number.isInteger(parsed) && parsed > 0 ? parsed : 5;
     const repos = await fetchTrendingRepos();
     const targets = repos.slice(0, limit);
     console.log(`Processing ${targets.length} trending repo(s)...`);
