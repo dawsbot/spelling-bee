@@ -5,8 +5,10 @@ repositories and opens pull requests with the corrections. Point it at a single
 repo or let it sweep trending repositories automatically.
 
 It scans `.md`, `.txt`, and `.rtf` files, is Markdown-aware (skips fenced and
-inline code, URLs, and emails), and lets you ignore words, files, or directories
-during interactive review.
+inline code, URLs, and emails), and lets you ignore words, files, directories,
+or the whole repo during interactive review. Any repository it has already
+processed (a PR opened, no fixes found, or skipped) is remembered locally and
+skipped before cloning on future runs.
 
 ## Setup
 

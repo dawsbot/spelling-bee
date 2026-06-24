@@ -8,9 +8,13 @@ import {
 const path = require("path");
 
 let settingsPromise: Promise<any> | null = null;
+// SPELLING_BEE_CONFIG_DIR redirects the store to a throwaway dir so tests don't
+// read or mutate the real user config. Unset in normal use.
+const configCwd = process.env.SPELLING_BEE_CONFIG_DIR;
 const conf = new Conf<{ ignoredWords: string[]; ignoredDirectories: string[] }>(
   {
     projectName: "spelling-bee-js",
+    ...(configCwd ? { cwd: configCwd } : {}),
   }
 );
 const IGNORED_KEY = "ignoredWords";
@@ -87,6 +91,13 @@ class IgnoreFileError extends Error {
   }
 }
 
+/** Thrown to abort the entire repository and never process it again. */
+export class SkipRepoError extends Error {
+  constructor() {
+    super("Skip this repository");
+  }
+}
+
 // cspell ships dictionaries for code, brands, and acronyms (WebGL, GitHub,
 // JSON, npm, ...) and understands camelCase, so technical terms no longer read
 // as misspellings the way they did under a plain English dictionary. We layer
@@ -157,12 +168,13 @@ async function promptForCorrection(
   }
   if (prevLine) console.log(`\nPrev: ${prevLine}`);
   console.log(`Line: ${currLine}`);
-  // Truncate suggestions to 10, add '*ignore*', '*ignore forever*', '*ignore file*', and '*ignore directory*' as the first options
+  // Truncate suggestions to 10; offer the ignore/skip actions as the first options.
   const choices = [
     "*ignore*",
     "*ignore forever*",
     "*ignore file*",
     "*ignore directory*",
+    "*skip repo*",
     ...suggestions.slice(0, 10),
   ];
   const prompt = new Select({
@@ -191,6 +203,9 @@ async function promptForCorrection(
       console.log(`Added directory '${dir}' to ignore list.`);
     }
     throw new IgnoreDirectoryError();
+  }
+  if (answer === "*skip repo*") {
+    throw new SkipRepoError();
   }
   return answer;
 }
