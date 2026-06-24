@@ -1,6 +1,6 @@
 // Fetch trending GitHub repositories using the GitHub REST API
 // Uses 'conf' for persistent disk-based caching (24 hours)
-// Requires GITHUB_TOKEN in Bun.env
+// Authenticates via the shared gh() helper (gh CLI token or GITHUB_TOKEN)
 
 import Conf from "conf";
 import { gh } from "./github";
