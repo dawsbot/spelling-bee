@@ -9,17 +9,15 @@
     "typecheck": "tsgo --noEmit"
   },
   "devDependencies": {
-    "@types/bun": "latest",
-    "@types/nspell": "^2.1.6"
+    "@types/bun": "latest"
   },
   "peerDependencies": {
     "typescript": "^5"
   },
   "dependencies": {
     "conf": "^13.1.0",
-    "dictionary-en": "^4.0.0",
+    "cspell-lib": "^10.0.1",
     "enquirer": "^2.4.1",
-    "ignore": "^7.0.4",
-    "nspell": "^2.1.5"
+    "ignore": "^7.0.4"
   }
 }

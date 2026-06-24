@@ -1,9 +1,13 @@
-const nspell = require("nspell");
 const { Select } = require("enquirer");
 import Conf from "conf";
+import {
+  spellCheckDocument,
+  getDefaultSettings,
+  mergeSettings,
+} from "cspell-lib";
 const path = require("path");
 
-let spellPromise: Promise<any> | null = null;
+let settingsPromise: Promise<any> | null = null;
 const conf = new Conf<{ ignoredWords: string[]; ignoredDirectories: string[] }>(
   {
     projectName: "spelling-bee-js",
@@ -83,17 +87,53 @@ class IgnoreFileError extends Error {
   }
 }
 
-async function getSpell(): Promise<any> {
-  if (spellPromise) return spellPromise;
-  spellPromise = (async () => {
-    // Read the .aff and .dic files directly from node_modules
-    const affPath = "node_modules/dictionary-en/index.aff";
-    const dicPath = "node_modules/dictionary-en/index.dic";
-    const aff = await Bun.file(affPath).text();
-    const dic = await Bun.file(dicPath).text();
-    return nspell(aff, dic);
-  })();
-  return spellPromise;
+// cspell ships dictionaries for code, brands, and acronyms (WebGL, GitHub,
+// JSON, npm, ...) and understands camelCase, so technical terms no longer read
+// as misspellings the way they did under a plain English dictionary. We layer
+// US + UK English on top of cspell's default software-term dictionaries.
+async function getSettings(): Promise<any> {
+  if (settingsPromise) return settingsPromise;
+  settingsPromise = (async () =>
+    mergeSettings(await getDefaultSettings(), {
+      dictionaries: [
+        "en_us",
+        "en-gb",
+        "softwareTerms",
+        "companies",
+        "filetypes",
+        "computing-acronyms",
+      ],
+    }))();
+  return settingsPromise;
+}
+
+interface Misspelling {
+  word: string;
+  /** Offset of the word within the supplied text fragment. */
+  offset: number;
+  length: number;
+  suggestions: string[];
+}
+
+/** Run cspell over a fragment of prose and return its misspellings in order. */
+async function findMisspellings(text: string): Promise<Misspelling[]> {
+  const settings = await getSettings();
+  const { issues } = await spellCheckDocument(
+    { uri: "text://fragment.md", text, languageId: "markdown", locale: "en" },
+    { generateSuggestions: true, numSuggestions: 10 },
+    settings
+  );
+  return issues
+    .map((issue: any): Misspelling => {
+      const raw = issue.suggestionsEx ?? issue.suggestions ?? [];
+      return {
+        word: issue.text,
+        offset: issue.offset,
+        length: issue.length ?? issue.text.length,
+        suggestions: raw.map((s: any) => (typeof s === "string" ? s : s.word)),
+      };
+    })
+    .sort((a: Misspelling, b: Misspelling) => a.offset - b.offset);
 }
 
 async function promptForCorrection(
@@ -169,7 +209,6 @@ export async function correctSpelling(
     // Skip this file
     return text;
   }
-  const spell = await getSpell();
   let ignored = getIgnoredWords();
   let tempIgnored = getTempIgnoredWords();
   const lines = text.split(/\r?\n/);
@@ -200,10 +239,8 @@ export async function correctSpelling(
       }
       // For lines outside code blocks, preserve inline code and only spellcheck non-inline-code regions
       let result = "";
-      let lastIdx = 0;
       const inlineCodeRegex = /`([^`]+)`/g;
       let match;
-      let processedLine = line;
       let segments = [];
       let segmentStart = 0;
       while ((match = inlineCodeRegex.exec(line)) !== null) {
@@ -232,45 +269,38 @@ export async function correctSpelling(
             result += seg.text;
             continue;
           }
-          const words: string[] = seg.text.split(/(\b\w+\b)/g) as string[];
-          for (let i = 0; i < words.length; i++) {
-            const word = words[i] as string;
-            if (!word) continue;
-            // Skip emails, URLs, and numbers as words
-            if (EMAIL_REGEX.test(word) || URL_REGEX.test(word)) continue;
-            if (/^\d+(\.\d+)?$/.test(word)) continue; // Ignore numbers (integer or decimal)
-            // Strip common Markdown formatting from start/end
-            const stripped = word.replace(
-              /^[*_~`\[\]()<>#>!.,:;'\"]+|[*_~`\[\]()<>#>!.,:;'\"]+$/g,
-              ""
+          // Let cspell tokenize the fragment (it handles camelCase, code
+          // terms, and numbers itself) and replace each misspelling in place.
+          // Issues are ordered by offset, so we splice from a moving cursor.
+          const issues = await findMisspellings(seg.text);
+          let cursor = 0;
+          for (const issue of issues) {
+            const lower = issue.word.toLowerCase();
+            if (ignored.has(lower) || tempIgnored.has(lower)) continue;
+            if (issue.suggestions.length === 0) continue;
+            const prevLine = lineIdx > 0 ? lines[lineIdx - 1] ?? "" : "";
+            const replacement = await promptForCorrection(
+              issue.word,
+              issue.suggestions,
+              prevLine,
+              line,
+              filePath,
+              autoYes
             );
-            if (!stripped) continue;
-            if (ignored.has(stripped.toLowerCase())) continue;
-            if (tempIgnored.has(stripped.toLowerCase())) continue;
-            if (/^\w+$/.test(stripped) && !spell.correct(stripped)) {
-              const suggestions = spell.suggest(stripped);
-              if (suggestions.length > 0) {
-                const prevLine = lineIdx > 0 ? lines[lineIdx - 1] ?? "" : "";
-                const replacement = await promptForCorrection(
-                  stripped,
-                  suggestions,
-                  prevLine,
-                  line,
-                  filePath,
-                  autoYes
-                );
-                // Replace only the misspelled token within the word slot,
-                // preserving any surrounding markdown punctuation.
-                if (replacement !== stripped) {
-                  words[i] = (word as string).replace(stripped, replacement);
-                  onCorrection?.({ file: filePath, from: stripped, to: replacement });
-                }
-                ignored = getIgnoredWords();
-                tempIgnored = getTempIgnoredWords();
-              }
+            ignored = getIgnoredWords();
+            tempIgnored = getTempIgnoredWords();
+            if (replacement !== issue.word) {
+              result += seg.text.slice(cursor, issue.offset) + replacement;
+              cursor = issue.offset + issue.length;
+              onCorrection?.({
+                file: filePath,
+                from: issue.word,
+                to: replacement,
+              });
             }
           }
-          result += words.map((w) => w ?? "").join("");
+          // Append whatever follows the last applied correction.
+          result += seg.text.slice(cursor);
         }
       }
       lines[lineIdx] = result as string;

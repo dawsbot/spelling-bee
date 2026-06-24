@@ -33,3 +33,17 @@ test("does not flag URLs or emails", async () => {
   expect(out).toContain("https://github.com/foo/barbaz");
   expect(out).toContain("me@exmaple.com");
 });
+
+test("does not flag technical terms, brands, or acronyms", async () => {
+  // The whole reason for the cspell engine: these are real words in a
+  // developer's vocabulary and must not be reported as misspellings.
+  const input =
+    "We render with WebGL, deploy via GitHub Actions, and send JSON over HTTP.";
+  const corrections: Correction[] = [];
+  const out = await correctSpelling(input, "README.md", {
+    autoYes: true,
+    onCorrection: (c) => corrections.push(c),
+  });
+  expect(out).toBe(input);
+  expect(corrections).toHaveLength(0);
+});
