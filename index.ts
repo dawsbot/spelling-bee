@@ -2,8 +2,10 @@ import { $ } from "bun";
 import { resolveRepo } from "./scripts/resolve-repo";
 import { cloneRepo } from "./scripts/clone-repo";
 import { detectAndCorrect } from "./scripts/detect-and-correct-spelling";
+import { SkipRepoError } from "./scripts/spell-correct";
 import { openPr, cleanupForks } from "./scripts/open-pr";
 import { fetchTrendingRepos } from "./scripts/fetch-trending-repos";
+import { hasSeenRepo, markRepoSeen } from "./scripts/repo-cache";
 
 interface RunOptions {
   autoYes: boolean;
@@ -36,7 +38,15 @@ async function processRepo(
   opts: RunOptions
 ): Promise<string | null> {
   const meta = await resolveRepo(input);
-  console.log(`\n→ ${meta.owner}/${meta.name} (${meta.stars}★)`);
+  const slug = `${meta.owner}/${meta.name}`;
+
+  // Never clone a repo we've already processed or skipped.
+  if (hasSeenRepo(slug)) {
+    console.log(`\n→ ${slug}: already seen, skipping (cached).`);
+    return null;
+  }
+
+  console.log(`\n→ ${slug} (${meta.stars}★)`);
 
   const { dir, branch } = await cloneRepo({
     owner: meta.owner,
@@ -44,13 +54,28 @@ async function processRepo(
   });
 
   try {
-    const { changedFiles, scanned, corrections } = await detectAndCorrect(dir, {
-      autoYes: opts.autoYes,
-      verbose: !opts.autoYes,
-    });
+    let result;
+    try {
+      result = await detectAndCorrect(dir, {
+        autoYes: opts.autoYes,
+        verbose: !opts.autoYes,
+      });
+    } catch (err) {
+      if (err instanceof SkipRepoError) {
+        // Reviewer chose "*skip repo*": remember it so we never clone it again.
+        markRepoSeen(slug);
+        console.log(`  Skipped ${slug}; it won't be cloned again.`);
+        return null;
+      }
+      throw err;
+    }
+
+    const { changedFiles, scanned, corrections } = result;
 
     if (changedFiles.length === 0) {
       console.log(`  No spelling fixes found (${scanned} files scanned).`);
+      // A dry run is exploratory, so don't permanently mark the repo seen.
+      if (!opts.dryRun) markRepoSeen(slug);
       return null;
     }
 
@@ -72,6 +97,7 @@ async function processRepo(
       corrections,
     });
     console.log(`  ✓ Opened PR: ${pr.url}`);
+    markRepoSeen(slug);
     return pr.url;
   } finally {
     await removeTempDir(dir);

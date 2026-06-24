@@ -1,0 +1,3 @@
+[test]
+# Redirect the config store to a throwaway dir before any test module loads.
+preload = ["./test-setup.ts"]
