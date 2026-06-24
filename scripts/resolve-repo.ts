@@ -1,16 +1,5 @@
 import type { RepoMetadata } from "./fetch-trending-repos";
-
-const GITHUB_API_URL = "https://api.github.com";
-
-function getAuthHeaders() {
-  const token = Bun.env.GITHUB_TOKEN;
-  if (!token) throw new Error("GITHUB_TOKEN not set in environment");
-  return {
-    Authorization: `token ${token}`,
-    Accept: "application/vnd.github+json",
-    "User-Agent": "spelling-bee-js",
-  };
-}
+import { gh } from "./github";
 
 function parseRepoInput(input: string): { owner: string; name: string } | null {
   // Accepts: owner/repo or https://github.com/owner/repo
@@ -35,15 +24,15 @@ export async function resolveRepo(input: string): Promise<RepoMetadata> {
     );
   }
   const { owner, name } = parsed;
-  const url = `${GITHUB_API_URL}/repos/${owner}/${name}`;
-  const res = await fetch(url, { headers: getAuthHeaders() });
-  if (res.status === 404) {
-    throw new Error(`Repository not found: ${owner}/${name}`);
+  let repo: any;
+  try {
+    repo = await gh(`/repos/${owner}/${name}`);
+  } catch (err) {
+    if ((err as Error).message.includes("404")) {
+      throw new Error(`Repository not found: ${owner}/${name}`);
+    }
+    throw err;
   }
-  if (!res.ok) {
-    throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
-  }
-  const repo = (await res.json()) as any;
   return {
     name: repo.name,
     owner: repo.owner.login,

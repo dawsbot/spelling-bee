@@ -2,7 +2,8 @@ import { $ } from "bun";
 import { randomBytes } from "crypto";
 
 const GITHUB_API = "https://api.github.com";
-const MAX_REPO_MB = 20_000;
+// Skip repositories larger than this to keep clones fast and disk usage sane.
+const MAX_REPO_MB = 200;
 
 export interface CloneRepoOptions {
   owner: string;
@@ -86,12 +87,20 @@ export async function cloneRepo({
   return { dir: tmpDir, branch: branchToClone };
 }
 
-// Example usage (uncomment to test directly)
-(async () => {
-  try {
-    const result = await cloneRepo({ owner: "nunomaduro", repo: "pokio" });
-    console.log("Cloned to:", result.dir, "Branch:", result.branch);
-  } catch (e) {
-    console.error(e);
+// Allow running this module directly for a quick manual clone:
+//   bun run scripts/clone-repo.ts <owner> <repo> [branch]
+if (import.meta.main) {
+  const [owner, repo, branch] = process.argv.slice(2);
+  if (!owner || !repo) {
+    console.error("Usage: bun run scripts/clone-repo.ts <owner> <repo> [branch]");
+    process.exit(1);
   }
-})();
+  cloneRepo({ owner, repo, branch })
+    .then((result) =>
+      console.log("Cloned to:", result.dir, "Branch:", result.branch)
+    )
+    .catch((e) => {
+      console.error(e);
+      process.exit(1);
+    });
+}
