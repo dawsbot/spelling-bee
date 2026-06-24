@@ -81,7 +81,7 @@ async function processRepo(
 
     const { changedFiles, scanned, corrections } = result;
 
-    if (changedFiles.length === 0) {
+    if (changedFiles.length === 0 || corrections.length === 0) {
       console.log(`  No spelling fixes found (${scanned} files scanned).`);
       // A dry run is exploratory, so don't permanently mark the repo seen.
       if (!opts.dryRun) markRepoSeen(slug);

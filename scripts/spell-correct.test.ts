@@ -27,6 +27,27 @@ test("preserves fenced code blocks", async () => {
   expect(out).toContain("thsi is codez insde a fence");
 });
 
+test("preserves CRLF line endings (no normalization churn)", async () => {
+  // A Windows-line-ending file with no misspellings must come back byte-for-byte
+  // identical -- otherwise CRLF->LF normalization alone triggers empty PRs.
+  const input = "This is fine.\r\nSo is this.\r\n";
+  const corrections: Correction[] = [];
+  const out = await correctSpelling(input, "test.txt", {
+    autoYes: true,
+    onCorrection: (c) => corrections.push(c),
+  });
+  expect(out).toBe(input);
+  expect(corrections).toHaveLength(0);
+});
+
+test("keeps CRLF endings even when correcting a typo", async () => {
+  const input = "This sentance is wrong.\r\nThis line is fine.\r\n";
+  const out = await correctSpelling(input, "test.txt", { autoYes: true });
+  expect(out).toContain("sentence");
+  expect(out).toContain("\r\n"); // surviving lines keep their CRLF
+  expect(out.endsWith("\r\n")).toBe(true);
+});
+
 test("does not flag URLs or emails", async () => {
   const input = "See https://github.com/foo/barbaz or email me@exmaple.com.";
   const out = await correctSpelling(input, "test.txt", { autoYes: true });
