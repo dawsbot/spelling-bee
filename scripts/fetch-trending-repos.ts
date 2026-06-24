@@ -3,8 +3,8 @@
 // Requires GITHUB_TOKEN in Bun.env
 
 import Conf from "conf";
+import { gh } from "./github";
 
-const GITHUB_API_URL = "https://api.github.com";
 const CACHE_KEY = "trendingRepos";
 const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
@@ -19,16 +19,6 @@ export interface RepoMetadata {
   description: string;
   stars: number;
   language: string | null;
-}
-
-function getAuthHeaders() {
-  const token = Bun.env.GITHUB_TOKEN;
-  if (!token) throw new Error("GITHUB_TOKEN not set in environment");
-  return {
-    Authorization: `token ${token}`,
-    Accept: "application/vnd.github+json",
-    "User-Agent": "spelling-bee-js",
-  };
 }
 
 const LANGUAGES = [
@@ -70,23 +60,10 @@ export async function fetchTrendingRepos(): Promise<RepoMetadata[]> {
   const seen = new Set<string>();
 
   for (const lang of LANGUAGES) {
-    const url = `${GITHUB_API_URL}/search/repositories?q=language:${encodeURIComponent(
+    const url = `/search/repositories?q=language:${encodeURIComponent(
       lang
     )}+created:>${lastWeek}&sort=stars&order=desc&per_page=20`;
-    const res = await fetch(url, {
-      headers: getAuthHeaders(),
-    });
-    if (res.status === 403) {
-      const reset = res.headers.get("x-ratelimit-reset");
-      const resetTime = reset ? new Date(Number(reset) * 1000) : null;
-      throw new Error(
-        `GitHub API rate limit exceeded. Try again after ${resetTime}`
-      );
-    }
-    if (!res.ok) {
-      throw new Error(`GitHub API error: ${res.status} ${res.statusText}`);
-    }
-    const json = (await res.json()) as any;
+    const json = (await gh(url)) as any;
     for (const repo of json.items || []) {
       const fullName = `${repo.owner.login}/${repo.name}`;
       if (!seen.has(fullName)) {

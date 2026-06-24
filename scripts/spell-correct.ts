@@ -58,6 +58,19 @@ function addTempIgnoredWord(word: string) {
   conf.set(TEMP_IGNORED_KEY, tempList);
 }
 
+export interface Correction {
+  file: string;
+  from: string;
+  to: string;
+}
+
+export interface CorrectOptions {
+  /** Non-interactive: auto-apply the top suggestion instead of prompting. */
+  autoYes?: boolean;
+  /** Invoked for every applied correction (used to build PR summaries). */
+  onCorrection?: (correction: Correction) => void;
+}
+
 class IgnoreDirectoryError extends Error {
   constructor() {
     super("Ignore this directory");
@@ -88,8 +101,13 @@ async function promptForCorrection(
   suggestions: string[],
   prevLine: string,
   currLine: string,
-  filePath: string
+  filePath: string,
+  autoYes: boolean
 ): Promise<string> {
+  // Non-interactive mode: accept the top suggestion without prompting.
+  if (autoYes) {
+    return suggestions[0] ?? word;
+  }
   // Print context
   if (filePath) {
     // Print file path relative to repo root
@@ -97,7 +115,6 @@ async function promptForCorrection(
     const relPath = path.relative(repoRoot, filePath);
     console.log(`File: ${relPath}`);
   }
-  console.log(filePath);
   if (prevLine) console.log(`\nPrev: ${prevLine}`);
   console.log(`Line: ${currLine}`);
   // Truncate suggestions to 10, add '*ignore*', '*ignore forever*', '*ignore file*', and '*ignore directory*' as the first options
@@ -140,8 +157,10 @@ async function promptForCorrection(
 
 export async function correctSpelling(
   text: string,
-  filePath: string
+  filePath: string,
+  opts: CorrectOptions = {}
 ): Promise<string> {
+  const { autoYes = false, onCorrection } = opts;
   // Check if this file's directory is ignored
   const repoRoot = process.cwd();
   const dir = path.relative(repoRoot, path.dirname(filePath));
@@ -232,13 +251,20 @@ export async function correctSpelling(
               const suggestions = spell.suggest(stripped);
               if (suggestions.length > 0) {
                 const prevLine = lineIdx > 0 ? lines[lineIdx - 1] ?? "" : "";
-                words[i] = await promptForCorrection(
+                const replacement = await promptForCorrection(
                   stripped,
                   suggestions,
                   prevLine,
                   line,
-                  filePath
+                  filePath,
+                  autoYes
                 );
+                // Replace only the misspelled token within the word slot,
+                // preserving any surrounding markdown punctuation.
+                if (replacement !== stripped) {
+                  words[i] = (word as string).replace(stripped, replacement);
+                  onCorrection?.({ file: filePath, from: stripped, to: replacement });
+                }
                 ignored = getIgnoredWords();
                 tempIgnored = getTempIgnoredWords();
               }

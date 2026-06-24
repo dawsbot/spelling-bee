@@ -1,0 +1,35 @@
+import { test, expect } from "bun:test";
+import { correctSpelling, type Correction } from "./spell-correct";
+
+test("auto-corrects misspelled words in non-interactive mode", async () => {
+  const input = "Ths is a smple sentence with errrors.";
+  const corrections: Correction[] = [];
+  const out = await correctSpelling(input, "test.txt", {
+    autoYes: true,
+    onCorrection: (c) => corrections.push(c),
+  });
+  expect(out).not.toBe(input);
+  expect(corrections.length).toBeGreaterThan(0);
+  // Every recorded correction should actually differ from its source word.
+  for (const c of corrections) expect(c.from).not.toBe(c.to);
+});
+
+test("leaves correctly-spelled text untouched", async () => {
+  const input = "This is a simple sentence with no errors.";
+  const out = await correctSpelling(input, "test.txt", { autoYes: true });
+  expect(out).toBe(input);
+});
+
+test("preserves fenced code blocks", async () => {
+  const input = "Some text.\n\n```\nthsi is codez insde a fence\n```\n";
+  const out = await correctSpelling(input, "test.md", { autoYes: true });
+  // The fenced lines must survive verbatim.
+  expect(out).toContain("thsi is codez insde a fence");
+});
+
+test("does not flag URLs or emails", async () => {
+  const input = "See https://github.com/foo/barbaz or email me@exmaple.com.";
+  const out = await correctSpelling(input, "test.txt", { autoYes: true });
+  expect(out).toContain("https://github.com/foo/barbaz");
+  expect(out).toContain("me@exmaple.com");
+});
