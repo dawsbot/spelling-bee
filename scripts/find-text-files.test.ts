@@ -20,6 +20,26 @@ test("finds .md/.txt/.rtf files and skips other extensions", async () => {
   ]);
 });
 
+test("skips translated docs but keeps English ones", async () => {
+  const dir = mkdtempSync(join(tmpdir(), "sb-i18n-"));
+  mkdirSync(join(dir, "i18n"));
+  // Foreign-language translations that should be excluded.
+  for (const lang of ["ar", "de", "ja", "pt-BR", "zh-CN", "ko", "ru"]) {
+    writeFileSync(join(dir, "i18n", `README.${lang}.md`), "x");
+  }
+  // These must still be scanned.
+  writeFileSync(join(dir, "README.md"), "x");
+  writeFileSync(join(dir, "README.en.md"), "x");
+  writeFileSync(join(dir, "v2.md"), "x"); // ".v2" is not a language tag
+
+  const files = await findTextFiles(dir);
+  expect(files.map((f) => f.split("/").pop()!).sort()).toEqual([
+    "README.en.md",
+    "README.md",
+    "v2.md",
+  ]);
+});
+
 test("respects .gitignore", async () => {
   const dir = mkdtempSync(join(tmpdir(), "sb-ignore-"));
   mkdirSync(join(dir, "vendor"));
