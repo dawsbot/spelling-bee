@@ -247,7 +247,19 @@ export async function correctSpelling(
   const languageId = languageIdFor(filePath);
   let ignored = getIgnoredWords();
   let tempIgnored = getTempIgnoredWords();
-  const lines = text.split(/\r?\n/);
+  // Split into content lines while preserving each line's original terminator.
+  // Rejoining with a hardcoded "\n" used to normalize CRLF->LF on every file,
+  // so a Windows-line-ending file with zero misspellings still came back
+  // "changed" and got committed -- producing huge no-op diffs and empty
+  // "Fix spelling mistakes" PRs. Keep the originals and stitch them back.
+  const parts = text.split(/(\r?\n)/);
+  const lines: string[] = [];
+  const lineEndings: string[] = [];
+  for (let i = 0; i < parts.length; i += 2) {
+    lines.push(parts[i] ?? "");
+    lineEndings.push(parts[i + 1] ?? "");
+  }
+  const stitch = () => lines.map((l, i) => l + (lineEndings[i] ?? "")).join("");
   let inFencedBlock = false;
   let fencedBlockDelimiter: string | undefined = "";
   try {
@@ -344,9 +356,9 @@ export async function correctSpelling(
   } catch (err) {
     if (err instanceof IgnoreDirectoryError || err instanceof IgnoreFileError) {
       // Skip the rest of this file
-      return lines.join("\n");
+      return stitch();
     }
     throw err;
   }
-  return lines.join("\n");
+  return stitch();
 }
